@@ -6,12 +6,13 @@ namespace GestionEnfermeria.Mapeador
 {
     public static class AsignarMapeador
     {
-        public static async Task<AsignarDTO> toAsignarDTO(this Asignar asignar)
+        public static AsignarDTO toAsignarDTO(this Asignar entity)
         {
-            
             return new AsignarDTO()
             {
-                
+                // Accedemos a las propiedades de las tablas relacionadas
+                Codigo_Enfermera = entity.Enfermera?.Codigo_Enfermera ?? "Sin Código",
+                Codigo_Turno = entity.Turno?.Codigo_Turno ?? "Sin Turno"
             };
         }
     }

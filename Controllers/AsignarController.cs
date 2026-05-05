@@ -8,6 +8,8 @@ using Microsoft.EntityFrameworkCore;
 using GestionEnfermeria.Data;
 using GestionEnfermeria.Dominio;
 using NuGet.Protocol;
+using GestionEnfermeria.DTO;
+using GestionEnfermeria.Mapeador;
 
 namespace GestionEnfermeria.Controllers
 {
@@ -26,94 +28,76 @@ namespace GestionEnfermeria.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAsignar()
         {
-            var asignar = await (from a in _context.Asignar
-                                 join t in _context.Turno on a.Id_Turno equals t.Id_Turno
-                                 join e in _context.Enfermera on a.Id_Enfermera equals e.Id_Enfermera
-                                 where a.Estado == "Activo"
-                                 select new
-                                 {
-                                     CodigoTurno = t.Codigo_Turno,
-                                     CodigoEnfermera = e.Codigo_Enfermera
-                                 }).ToListAsync();
-            return Ok(asignar);
+                var asignar = await _context.Asignar
+                .Include(a => a.Enfermera) // Carga los datos de la enfermera
+                .Include(a => a.Turno)     // Carga los datos del turno
+                .Where(a => a.Estado == "Activo")
+                .ToListAsync();
+
+            // Ahora mapeamos la lista de entidades a la lista de DTOs
+            var asignarDTOs = asignar.Select(a => a.toAsignarDTO()).ToList();
+
+            return Ok(asignarDTOs);
         }
 
         // GET: api/Asignar/5
         [HttpGet("{Codigo_Turno}/{Codigo_Enfermera}")]
         public async Task<IActionResult> GetAsignar(string Codigo_Turno, string Codigo_Enfermera)
         {
-            var asignar = await(from a in _context.Asignar
-                            join t in _context.Turno on a.Id_Turno equals t.Id_Turno
-                            join e in _context.Enfermera on a.Id_Enfermera equals e.Id_Enfermera
-                            where a.Estado == "Activo" && e.Codigo_Enfermera == Codigo_Enfermera && t.Codigo_Turno == Codigo_Turno
-                            select new
-                            {
-                                CodigoEnfermera = e.Codigo_Enfermera,
-                                CodigoTurno = t.Codigo_Turno
-                            }).FirstOrDefaultAsync();
-            return Ok(asignar);
+            var asignar = await _context.Asignar
+                        .Include(a => a.Turno)
+                        .Include(a => a.Enfermera)
+                        .Where
+                        (a => a.Estado == "Activo" &&
+                         a.Enfermera.Codigo_Enfermera == Codigo_Enfermera &&
+                         a.Turno.Codigo_Turno == Codigo_Turno)
+                        .FirstOrDefaultAsync();
+
+            if (asignar == null) return NotFound("No se encontró la asignación.");
+
+            return Ok(asignar.toAsignarDTO());
         }
 
         // PUT: api/Asignar/5
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPut("{Codigo_Turno}/{Codigo_Enfermera}")]
-        public async Task<IActionResult> PutAsignar(string Codigo_Turno, string Codigo_Enfermera, string Nuevo_Codigo_Turno, string Nuevo_Codigo_Enfermera)
+        public async Task<IActionResult> PutAsignar(string Codigo_Turno, string Codigo_Enfermera, [FromBody] AsignarDTO nuevoDto)
         {
-            var asignar = await (from a in _context.Asignar
-                                 where a.Turno.Codigo_Turno == Codigo_Turno && a.Enfermera.Codigo_Enfermera == Codigo_Enfermera && a.Estado == "Activo"
-                                 select a)
-                                .Include(a => a.Turno)
-                                .Include(a => a.Enfermera)
-                                .FirstOrDefaultAsync();
-            if(asignar == null)
-            {
-                return BadRequest("No existe la relacion entre el turno y la enfermera.");
-            }
-            var TurnoExiste = await (from t in _context.Turno
-                                     where t.Codigo_Turno == Nuevo_Codigo_Turno && t.Estado == "Activo"
-                                     select t).FirstOrDefaultAsync();
-            var EnfermeraExiste = await (from e in _context.Enfermera
-                                         where e.Codigo_Enfermera == Nuevo_Codigo_Enfermera && e.Estado == "Activo"
-                                         select e).FirstOrDefaultAsync();
-            if(TurnoExiste == null || EnfermeraExiste == null)
-            {
-                return BadRequest("El turno o la enfermera no existe.");
-            }
+            var asignar = await _context.Asignar
+                        .Include(a => a.Turno)
+                        .Include(a => a.Enfermera)
+                        .FirstOrDefaultAsync(a => a.Turno.Codigo_Turno == Codigo_Turno &&
+                                                 a.Enfermera.Codigo_Enfermera == Codigo_Enfermera &&
+                                                 a.Estado == "Activo");
+            if (asignar == null) return NotFound("No existe la relación original.");
 
-            asignar.Id_Turno = TurnoExiste.Id_Turno;
-            asignar.Id_Enfermera = EnfermeraExiste.Id_Enfermera;
-            _context.Asignar.Update(asignar);
+            var nuevoT = await _context.Turno.FirstOrDefaultAsync(t => t.Codigo_Turno == nuevoDto.Codigo_Turno && t.Estado == "Activo");
+            var nuevaE = await _context.Enfermera.FirstOrDefaultAsync(e => e.Codigo_Enfermera == nuevoDto.Codigo_Enfermera && e.Estado == "Activo");
+
+            if (nuevoT == null || nuevaE == null) return BadRequest("Los nuevos códigos de turno o enfermera no son válidos.");
+
+            asignar.Id_Turno = nuevoT.Id_Turno;
+            asignar.Id_Enfermera = nuevaE.Id_Enfermera;
+
+            _context.Entry(asignar).State = EntityState.Modified;
             await _context.SaveChangesAsync();
 
-            return Ok("Actualizado correctamente.");
+            return Ok(asignar.toAsignarDTO());
         }
 
         // POST: api/Asignar
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
-        public async Task<IActionResult> PostAsignar(string Codigo_Turno, string Codigo_Enfermera)
+        public async Task<IActionResult> PostAsignar([FromBody] AsignarDTO dto)
         {
-            var asignarExiste = await (from a in _context.Asignar
-                                       where a.Turno.Codigo_Turno == Codigo_Turno && a.Enfermera.Codigo_Enfermera == Codigo_Enfermera && a.Estado == "Activo"
-                                       select a)
-                                .Include(a => a.Turno)
-                                .Include(a => a.Enfermera)
-                                .FirstOrDefaultAsync();
-            if (asignarExiste != null)
-            {
-                return BadRequest("Ya existe la relacion entre la enfermera y el turno.");
-            }
-            var TurnoExiste = await (from t in _context.Turno
-                                     where t.Codigo_Turno == Codigo_Turno && t.Estado == "Activo"
-                                     select t).FirstOrDefaultAsync();
-            var EnfermeraExiste = await (from e in _context.Enfermera
-                                         where e.Codigo_Enfermera == Codigo_Enfermera && e.Estado == "Activo"
-                                         select e).FirstOrDefaultAsync();
+
+            if (dto == null) return BadRequest("Datos inválidos.");
+            var TurnoExiste = await _context.Turno.FirstOrDefaultAsync(t => t.Codigo_Turno == dto.Codigo_Turno && t.Estado == "Activo");
+            var EnfermeraExiste = await _context.Enfermera.FirstOrDefaultAsync(e => e.Codigo_Enfermera == dto.Codigo_Enfermera && e.Estado == "Activo");
+
             if (TurnoExiste == null || EnfermeraExiste == null)
-            {
-                return BadRequest("El turno o la enfermera no existe.");
-            }
-            
+                return BadRequest("El turno o la enfermera no existen o están inactivos.");
+
             var turnoNuevo = TurnoExiste;
 
             var tieneConflicto = await (from a in _context.Asignar
@@ -161,20 +145,19 @@ namespace GestionEnfermeria.Controllers
                 return BadRequest("Se alcanzó la capacidad máxima del campo.");
             }
 
-            Asignar asignar = new Asignar
+            var nuevaAsignacion = new Asignar
             {
                 Id_Turno = TurnoExiste.Id_Turno,
                 Id_Enfermera = EnfermeraExiste.Id_Enfermera,
                 Estado = "Activo"
             };
-            _context.Asignar.Add(asignar);
+
+            _context.Asignar.Add(nuevaAsignacion);
             await _context.SaveChangesAsync();
 
-            return Ok(new {
-                        TurnoExiste.Codigo_Turno, 
-                        EnfermeraExiste.Codigo_Enfermera
-                  });
+            return Ok(nuevaAsignacion.toAsignarDTO());
         }
+        
 
         // DELETE: api/Asignar/5
         [HttpDelete("{Codigo_Turno}/{Codigo_Enfermera}")]
