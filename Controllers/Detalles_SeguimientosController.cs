@@ -146,7 +146,7 @@ namespace GestionEnfermeria.Controllers
                 return BadRequest("La enfermera no tiene turnos asignados.");
 
             var detalle_Seguimiento_Existe = await (from ds in _context.Detalle_Seguimiento
-                                                    where ds.Id_Enfermera == enfermera.Id_Enfermera && ds.Id_Seguimiento == seguimiento.Id_Seguimiento
+                                                    where ds.Id_Enfermera == enfermera.Id_Enfermera && ds.Id_Seguimiento == seguimiento.Id_Seguimiento && ds.Estado == "Activo"
                                                     select ds).FirstOrDefaultAsync();
             if (detalle_Seguimiento_Existe != null)
             {
