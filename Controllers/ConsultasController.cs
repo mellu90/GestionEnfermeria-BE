@@ -102,7 +102,7 @@ namespace GestionEnfermeria.Controllers
         public async Task<IActionResult> GetPacientesEgresados()
         {
             var consulta = await (from s in _context.Seguimiento
-                                  where s.Estado_Seguimiento == "Finalizado"
+                                  where s.Estado_Seguimiento == "FINALIZADO"
                                   select new PacienteEgresoDTO
                                   {
                                       CodigoPaciente = s.Codigo_Seguimiento,
