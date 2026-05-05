@@ -64,14 +64,17 @@ namespace GestionEnfermeria.Controllers
         [HttpGet("EnfermerasDisponibles")]
         public async Task<IActionResult> GetEnfermerasSinAsignacion()
         {
+            // Buscamos enfermeras que estén activas 
+            // Y que NO tengan un detalle de seguimiento activo en este preciso instante
             var consulta = await (from e in _context.Enfermera
-                                  where !_context.Asignar.Any(a => a.Id_Enfermera == e.Id_Enfermera && a.Estado == "Activo")
-                                  && e.Estado == "Activo"
+                                  where e.Estado == "Activo"
+                                  && !_context.Detalle_Seguimiento.Any(ds =>
+                                      ds.Id_Enfermera == e.Id_Enfermera &&
+                                      ds.Estado == "Activo")
                                   select new
                                   {
                                       e.Codigo_Enfermera,
-                                      e.Nombre,
-                                      e.Apellido_Paterno
+                                      NombreCompleto = e.Nombre + " " + e.Apellido_Paterno
                                   }).ToListAsync();
             return Ok(consulta);
         }
