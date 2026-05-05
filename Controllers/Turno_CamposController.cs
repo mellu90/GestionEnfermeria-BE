@@ -1,13 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using GestionEnfermeria.Data;
+using GestionEnfermeria.Dominio;
+using GestionEnfermeria.DTO;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using GestionEnfermeria.Data;
-using GestionEnfermeria.Dominio;
-
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using GestionEnfermeria.Mapeador;
 namespace GestionEnfermeria.Controllers
 {
     [Route("api/[controller]")]
@@ -25,116 +26,84 @@ namespace GestionEnfermeria.Controllers
         [HttpGet]
         public async Task<IActionResult> GetTurno_Campo()
         {
-            var turno_campo = await (from tc in _context.Turno_Campo
-                                     join t in _context.Turno on tc.Id_Turno equals t.Id_Turno
-                                     join c in _context.Campo on tc.Id_Campo equals c.Id_Campo
-                                     where tc.Estado == "Activo"
-                                     select new
-                                     {
-                                         CodigoTurno = t.Codigo_Turno,
-                                         CodigoCampo = c.Codigo_Campo
-                                     }).ToListAsync();
-            return Ok(turno_campo);
+            var registros = await _context.Turno_Campo
+                            .Include(tc => tc.Turno)
+                            .Include(tc => tc.Campo)
+                            .Where(tc => tc.Estado == "Activo")
+                            .ToListAsync();
+
+            return Ok(registros.Select(tc => tc.toTurnoCampoDTO()));
         }
 
         // GET: api/Turno_Campos/5
         [HttpGet("{Codigo_Turno}/{Codigo_Campo}")]
         public async Task<IActionResult> GetTurno_Campo(string Codigo_Turno, string Codigo_Campo)
         {
-            var turno_Campo = await (from tc in _context.Turno_Campo
-                                     join t in _context.Turno on tc.Id_Turno equals t.Id_Turno
-                                     join c in _context.Campo on tc.Id_Campo equals c.Id_Campo
-                                     where tc.Estado == "Activo" && c.Codigo_Campo == Codigo_Campo && t.Codigo_Turno == Codigo_Turno
-                                     select new {
-                                         CodigoTurno = t.Codigo_Turno,
-                                         CodigoCampo = c.Codigo_Campo
-                                     }).FirstOrDefaultAsync();
+            var registro = await _context.Turno_Campo
+                            .Include(tc => tc.Turno)
+                            .Include(tc => tc.Campo)
+                            .FirstOrDefaultAsync(tc => tc.Turno.Codigo_Turno == Codigo_Turno &&
+                                                     tc.Campo.Codigo_Campo == Codigo_Campo &&
+                                                     tc.Estado == "Activo");
 
-            if (turno_Campo == null)
-            {
-                return BadRequest("No existe la relacion entre ese turno y ese campo");
-            }
+            if (registro == null) return NotFound("No existe la relación.");
 
-            return Ok(turno_Campo);
+            return Ok(registro.toTurnoCampoDTO());
         }
 
         // PUT: api/Turno_Campos/5
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPut("{Codigo_Turno}/{Codigo_Campo}")]
-        public async Task<IActionResult> PutTurno_Campo(string Codigo_Turno, string Codigo_Campo, string Nuevo_Codigo_Turno, string Nuevo_Codigo_Campo)
+        public async Task<IActionResult> PutTurno_Campo(string Codigo_Turno, string Codigo_Campo, [FromBody] Turno_CampoDTO nuevoDto)
         {
-            var turno_Campo = await (from tc in _context.Turno_Campo
-                                     where tc.Turno.Codigo_Turno == Codigo_Turno && tc.Campo.Codigo_Campo == Codigo_Campo && tc.Estado == "Activo"
-                                     select tc)
-                                    .Include(a => a.Turno)
-                                    .Include(a => a.Campo)
-                                    .FirstOrDefaultAsync();
-            if (turno_Campo == null)
-            {
-                return BadRequest("La relacion del turno con el campo no existe");
-            }
-            var turnoExiste = await (from t in _context.Turno
-                                     where t.Codigo_Turno == Nuevo_Codigo_Turno && t.Estado == "Activo"
-                                     select t).FirstOrDefaultAsync();
-            var campoExiste = await (from c in _context.Campo
-                                         where c.Codigo_Campo == Nuevo_Codigo_Campo && c.Estado == "Activo"
-                                         select c).FirstOrDefaultAsync();
-            if (turnoExiste == null || campoExiste == null)
-            {
-                return BadRequest("El turno o el campo no existe.");
-            }
-            var existeDuplicado = await _context.Turno_Campo.AnyAsync(tc =>
-                                tc.Id_Turno == turnoExiste.Id_Turno &&
-                                tc.Id_Campo == campoExiste.Id_Campo &&
-                                tc.Estado == "Activo"
-            );
+            var registro = await _context.Turno_Campo
+                .Include(tc => tc.Turno)
+                .Include(tc => tc.Campo)
+                .FirstOrDefaultAsync(tc => tc.Turno.Codigo_Turno == Codigo_Turno && tc.Campo.Codigo_Campo == Codigo_Campo && tc.Estado == "Activo");
 
-            if (existeDuplicado)
-                return BadRequest("Ya existe esta relación turno-campo.");            
-            turno_Campo.Id_Turno = turnoExiste.Id_Turno;
-            turno_Campo.Id_Campo = campoExiste.Id_Campo;
+            if (registro == null) return NotFound("Relación original no encontrada.");
 
-            _context.Turno_Campo.Update(turno_Campo);
+            var nuevoT = await _context.Turno.FirstOrDefaultAsync(t => t.Codigo_Turno == nuevoDto.Codigo_Turno && t.Estado == "Activo");
+            var nuevoC = await _context.Campo.FirstOrDefaultAsync(c => c.Codigo_Campo == nuevoDto.Codigo_Campo && c.Estado == "Activo");
+
+            if (nuevoT == null || nuevoC == null) return BadRequest("Los nuevos códigos no son válidos.");
+
+            registro.Id_Turno = nuevoT.Id_Turno;
+            registro.Id_Campo = nuevoC.Id_Campo;
+
+            _context.Entry(registro).State = EntityState.Modified;
             await _context.SaveChangesAsync();
 
-            return Ok("Actualizado correctamente.");
-            
+            return Ok(registro.toTurnoCampoDTO());
         }
 
         // POST: api/Turno_Campos
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
-        public async Task<IActionResult> PostTurno_Campo(string Codigo_Turno, string Codigo_Campo)
+        public async Task<IActionResult> PostTurno_Campo([FromBody] Turno_CampoDTO dto)
         {
-            var turno_CampoExiste = await (from tc in _context.Turno_Campo
-                                     where tc.Turno.Codigo_Turno == Codigo_Turno && tc.Campo.Codigo_Campo == Codigo_Campo && tc.Estado == "Activo"
-                                     select tc)
-                                .Include(tc => tc.Turno)
-                                .Include(tc => tc.Campo)
-                                .FirstOrDefaultAsync();
-            if (turno_CampoExiste != null)
-            {
-                return Ok("Ya existe la relacion entre el turno y campo");
-            }
-            var turnoExiste = await (from t in _context.Turno
-                                     where t.Codigo_Turno == Codigo_Turno && t.Estado == "Activo"
-                                     select t).FirstOrDefaultAsync();
-            var campoExiste = await (from c in _context.Campo
-                                     where c.Codigo_Campo == Codigo_Campo && c.Estado == "Activo"
-                                     select c).FirstOrDefaultAsync();
-            if (turnoExiste == null || campoExiste == null)
-                return BadRequest("No existe el turno o el campo");
+            if (dto == null) return BadRequest("Datos inválidos.");
 
-            Turno_Campo turno_campo = new Turno_Campo
+            var turno = await _context.Turno.FirstOrDefaultAsync(t => t.Codigo_Turno == dto.Codigo_Turno && t.Estado == "Activo");
+            var campo = await _context.Campo.FirstOrDefaultAsync(c => c.Codigo_Campo == dto.Codigo_Campo && c.Estado == "Activo");
+
+            if (turno == null || campo == null) return BadRequest("Turno o Campo no encontrados.");
+
+            // Validación de duplicado
+            var existe = await _context.Turno_Campo.AnyAsync(tc => tc.Id_Turno == turno.Id_Turno && tc.Id_Campo == campo.Id_Campo && tc.Estado == "Activo");
+            if (existe) return BadRequest("Esta relación ya existe.");
+
+            var nuevo = new Turno_Campo
             {
-                Id_Turno = turnoExiste.Id_Turno,
-                Id_Campo = campoExiste.Id_Campo
+                Id_Turno = turno.Id_Turno,
+                Id_Campo = campo.Id_Campo,
+                Estado = "Activo"
             };
 
-            _context.Turno_Campo.Add(turno_campo);
+            _context.Turno_Campo.Add(nuevo);
             await _context.SaveChangesAsync();
 
-            return Ok("Se creo exitosamente");
+            return Ok(nuevo.toTurnoCampoDTO());
         }
 
         // DELETE: api/Turno_Campos/5
