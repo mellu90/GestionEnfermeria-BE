@@ -120,7 +120,8 @@ namespace GestionEnfermeria.Controllers
                                   && ds.Estado == "Activo"
                                   select new MedicinaPendienteDTO
                                   {
-                                      Paciente = s.Codigo_Seguimiento,
+                                      Codigo = s.Codigo_Seguimiento,
+                                      Paciente = s.Codigo_Seguro,
                                       Medicamento = ds.Codigo_Receta.ToString(),
                                       EnfermeraAsignada = e.Nombre + " " + e.Apellido_Paterno,
                                       FechaInicio = ds.Fecha_Inicio
@@ -181,6 +182,7 @@ namespace GestionEnfermeria.Controllers
                                   where ds.Estado == "Activo"
                                   select new NotasAnterioresDTO
                                   {
+                                      Codigo = e.Codigo_Enfermera,
                                       NombreEnfermera = e.Nombre + " " + e.Apellido_Paterno,
                                       Nota = ds.Observacion,
                                       Fecha_Inicio = ds.Fecha_Inicio,
