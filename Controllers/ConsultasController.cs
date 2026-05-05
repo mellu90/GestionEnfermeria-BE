@@ -138,12 +138,15 @@ namespace GestionEnfermeria.Controllers
             var consulta = await (from ds in _context.Detalle_Seguimiento
                                   join e in _context.Enfermera on ds.Id_Enfermera equals e.Id_Enfermera
                                   where ds.Estado == "Activo"
-                                  group ds by e.Nombre + " " + e.Apellido_Paterno into grupo
+                                  // Agrupamos por ambos campos para poder proyectarlos
+                                  group ds by new { e.Codigo_Enfermera, NombreCompleto = e.Nombre + " " + e.Apellido_Paterno } into grupo
                                   select new CargaLaboraDTO
                                   {
-                                      Enfermera = grupo.Key,
+                                      Codigo = grupo.Key.Codigo_Enfermera,
+                                      Enfermera = grupo.Key.NombreCompleto,
                                       CantidadTareas = grupo.Count()
                                   }).ToListAsync();
+
             return Ok(consulta);
         }
         //Consultar Cobertura de Campos por Turno
