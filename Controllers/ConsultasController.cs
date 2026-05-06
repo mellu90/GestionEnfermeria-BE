@@ -62,20 +62,25 @@ namespace GestionEnfermeria.Controllers
             return Ok(consulta);
         }
         [HttpGet("EnfermerasDisponibles")]
-        public async Task<IActionResult> GetEnfermerasSinAsignacion()
+        public async Task<IActionResult> GetEnfermerasDisponibles()
         {
-            // Buscamos enfermeras que estén activas 
-            // Y que NO tengan un detalle de seguimiento activo en este preciso instante
+            // Definimos el límite de carga laboral
+            const int LimiteTareas = 5;
+
             var consulta = await (from e in _context.Enfermera
                                   where e.Estado == "Activo"
-                                  && !_context.Detalle_Seguimiento.Any(ds =>
-                                      ds.Id_Enfermera == e.Id_Enfermera &&
-                                      ds.Estado == "Activo")
+                                  let tareasActivas = _context.Detalle_Seguimiento.Count(ds =>
+                                      ds.Id_Enfermera == e.Id_Enfermera && ds.Estado == "Activo")
+                                  // Filtramos las que no han llegado al tope
+                                  where tareasActivas < LimiteTareas
                                   select new
                                   {
                                       e.Codigo_Enfermera,
-                                      NombreCompleto = e.Nombre + " " + e.Apellido_Paterno
+                                      NombreCompleto = e.Nombre + " " + e.Apellido_Paterno,
+                                      TareasActuales = tareasActivas,
+                                      CuposDisponibles = LimiteTareas - tareasActivas
                                   }).ToListAsync();
+
             return Ok(consulta);
         }
         [HttpGet("TurnosSobrepasanCapacidad")]
@@ -102,7 +107,7 @@ namespace GestionEnfermeria.Controllers
         public async Task<IActionResult> GetPacientesEgresados()
         {
             var consulta = await (from s in _context.Seguimiento
-                                  where s.Estado_Seguimiento == "FINALIZADO"
+                                  where s.Estado_Seguimiento == "FINALIZADO" && s.Estado == "Activo"
                                   select new PacienteEgresoDTO
                                   {
                                       CodigoPaciente = s.Codigo_Seguimiento,
@@ -115,20 +120,24 @@ namespace GestionEnfermeria.Controllers
         [HttpGet("MedicinasPendientes")]
         public async Task<IActionResult> GetMedicinasPendientes()
         {
+            // Obtenemos la fecha de hoy para comparar
+            var hoy = DateOnly.FromDateTime(DateTime.Now);
+
             var consulta = await (from ds in _context.Detalle_Seguimiento
                                   join s in _context.Seguimiento on ds.Id_Seguimiento equals s.Id_Seguimiento
                                   join e in _context.Enfermera on ds.Id_Enfermera equals e.Id_Enfermera
-                                  where ds.Codigo_Receta != null
-                                  && ds.Fecha_Final == null
-                                  && ds.Estado == "Activo"
+                                  where ds.Estado == "Activo"
+                                  && ds.Codigo_Receta != null                                  
+                                  && ds.Fecha_Final >= hoy
                                   select new MedicinaPendienteDTO
                                   {
                                       Codigo = s.Codigo_Seguimiento,
                                       Paciente = s.Codigo_Seguro,
-                                      Medicamento = ds.Codigo_Receta.ToString(),
+                                      Medicamento = ds.Codigo_Receta,
                                       EnfermeraAsignada = e.Nombre + " " + e.Apellido_Paterno,
                                       FechaInicio = ds.Fecha_Inicio
                                   }).ToListAsync();
+
             return Ok(consulta);
         }
         //Ver cuántas tareas tiene cada enfermera
