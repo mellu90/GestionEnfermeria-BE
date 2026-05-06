@@ -64,21 +64,24 @@ namespace GestionEnfermeria.Controllers
         [HttpGet("EnfermerasDisponibles")]
         public async Task<IActionResult> GetEnfermerasDisponibles()
         {
-            // Definimos el límite de carga laboral
             const int LimiteTareas = 5;
+
+            // Obtenemos solo la fecha actual (sin hora) para comparar con DateOnly
+            var hoy = DateOnly.FromDateTime(DateTime.Now);
 
             var consulta = await (from e in _context.Enfermera
                                   where e.Estado == "Activo"
-                                  let tareasActivas = _context.Detalle_Seguimiento.Count(ds =>
-                                      ds.Id_Enfermera == e.Id_Enfermera && ds.Estado == "Activo")
-                                  // Filtramos las que no han llegado al tope
-                                  where tareasActivas < LimiteTareas
+                                  let tareasVigentes = _context.Detalle_Seguimiento.Count(ds =>
+                                      ds.Id_Enfermera == e.Id_Enfermera &&
+                                      ds.Estado == "Activo" &&
+                                      ds.Fecha_Final >= hoy) // Comparamos DateOnly vs DateOnly
+                                  where tareasVigentes < LimiteTareas
                                   select new
                                   {
                                       e.Codigo_Enfermera,
                                       NombreCompleto = e.Nombre + " " + e.Apellido_Paterno,
-                                      TareasActuales = tareasActivas,
-                                      CuposDisponibles = LimiteTareas - tareasActivas
+                                      TareasVigentes = tareasVigentes,
+                                      CuposLibres = LimiteTareas - tareasVigentes
                                   }).ToListAsync();
 
             return Ok(consulta);
