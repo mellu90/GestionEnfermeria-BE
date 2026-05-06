@@ -65,16 +65,16 @@ namespace GestionEnfermeria.Controllers
         public async Task<IActionResult> GetEnfermerasDisponibles()
         {
             const int LimiteTareas = 5;
-
-            // Obtenemos solo la fecha actual (sin hora) para comparar con DateOnly
             var hoy = DateOnly.FromDateTime(DateTime.Now);
 
             var consulta = await (from e in _context.Enfermera
                                   where e.Estado == "Activo"
                                   let tareasVigentes = _context.Detalle_Seguimiento.Count(ds =>
                                       ds.Id_Enfermera == e.Id_Enfermera &&
-                                      ds.Estado == "Activo" &&
-                                      ds.Fecha_Final >= hoy) // Comparamos DateOnly vs DateOnly
+                                      ds.Estado == "Activo" && // Borrado lógico del detalle
+                                      _context.Seguimiento.Any(s => s.Id_Seguimiento == ds.Id_Seguimiento
+                                                                 && s.Estado_Seguimiento != "FINALIZADO") && // Validamos el Padre
+                                      ds.Fecha_Final >= hoy)
                                   where tareasVigentes < LimiteTareas
                                   select new
                                   {
