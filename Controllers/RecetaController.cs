@@ -17,30 +17,28 @@ namespace GestionEnfermeria.Controllers
             _httpClientFactory = httpClientFactory;
         }
 
-        // GET: api/Receta/Catalogo
-        [HttpGet("Catalogo")]
-        public async Task<IActionResult> GetCatalogoMedicamentos()
+        // GET: api/Receta/Pendientes
+        [HttpGet("Pendientes")]
+        public async Task<IActionResult> GetRecetasPendientes()
         {
             try
             {
-                // 1. Creamos el cliente HTTP aquí mismo
                 var client = _httpClientFactory.CreateClient();
 
-                // 2. Definimos la URL de Render de tu compañero/equipo
-                var url = "https://hospital3ernivel-farmacia.onrender.com/api/Medicamentos/catalogo";
+                // Nueva URL de la farmacia
+                var url = "https://hospital3ernivel-farmacia.onrender.com/api/Recetas/receta/pendientes";
 
-                // 3. Hacemos la petición y mapeamos al DTO que creaste
-                var catalogo = await client.GetFromJsonAsync<List<RecetaGetDTO>>(url);
+                // Obtenemos la lista completa con sus detalles y posología
+                var recetas = await client.GetFromJsonAsync<List<RecetaGetDTO>>(url);
 
-                if (catalogo == null || catalogo.Count == 0)
-                    return NotFound("No se encontraron medicamentos en el catálogo.");
+                if (recetas == null || recetas.Count == 0)
+                    return NotFound("No se encontraron recetas pendientes en el sistema de farmacia.");
 
-                return Ok(catalogo);
+                return Ok(recetas);
             }
             catch (HttpRequestException ex)
             {
-                // Por si el servidor de la farmacia está apagado o en reposo
-                return StatusCode(500, $"Error al conectar con la farmacia: {ex.Message}");
+                return StatusCode(500, $"Error al conectar con farmacia (Render): {ex.Message}");
             }
         }
 
