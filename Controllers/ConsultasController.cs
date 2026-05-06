@@ -123,16 +123,24 @@ namespace GestionEnfermeria.Controllers
         [HttpGet("MedicinasPendientes")]
         public async Task<IActionResult> GetMedicinasPendientes()
         {
-            // Obtenemos la fecha de hoy para comparar
-            var hoy = DateOnly.FromDateTime(DateTime.Now);
+            // Obtenemos la hora actual en UTC
+            DateTime utcNow = DateTime.UtcNow;
+
+            // Definimos la zona horaria de Bolivia (UTC-4)
+            TimeZoneInfo boliviaTimeZone = TimeZoneInfo.FindSystemTimeZoneById("SA Western Standard Time");
+
+            // Convertimos la hora UTC a la hora de Bolivia
+            DateTime boliviaNow = TimeZoneInfo.ConvertTimeFromUtc(utcNow, boliviaTimeZone);
+
+            // Ahora sí, tenemos el 'hoy' correcto para Tarija
+            var hoy = DateOnly.FromDateTime(boliviaNow);
 
             var consulta = await (from ds in _context.Detalle_Seguimiento
                                   join s in _context.Seguimiento on ds.Id_Seguimiento equals s.Id_Seguimiento
                                   join e in _context.Enfermera on ds.Id_Enfermera equals e.Id_Enfermera
-                                  where ds.Estado == "Activo" // Borrado lógico del detalle
-                                  && s.Estado_Seguimiento != "FINALIZADO" // El seguimiento general no debe haber terminado
+                                  where ds.Estado == "Activo"
+                                  && s.Estado_Seguimiento != "FINALIZADO"
                                   && ds.Codigo_Receta != null
-                                  // REGLA DEL RANGO: Hoy debe estar entre Inicio y Fin (inclusive)
                                   && ds.Fecha_Inicio <= hoy
                                   && ds.Fecha_Final >= hoy
                                   select new MedicinaPendienteDTO
@@ -142,7 +150,7 @@ namespace GestionEnfermeria.Controllers
                                       Medicamento = ds.Codigo_Receta,
                                       EnfermeraAsignada = e.Nombre + " " + e.Apellido_Paterno,
                                       FechaInicio = ds.Fecha_Inicio,
-                                      FechaFinal = ds.Fecha_Final // Te sugiero agregarlo al DTO para el FE
+                                      FechaFinal = ds.Fecha_Final
                                   }).ToListAsync();
 
             return Ok(consulta);
