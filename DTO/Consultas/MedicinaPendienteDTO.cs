@@ -7,5 +7,6 @@
         public string Medicamento { get; set; }
         public string EnfermeraAsignada { get; set; }
         public DateOnly FechaInicio { get; set; }
+        public DateOnly FechaFinal { get; set; }
     }
 }

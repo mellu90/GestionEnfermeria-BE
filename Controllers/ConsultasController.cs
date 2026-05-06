@@ -129,8 +129,11 @@ namespace GestionEnfermeria.Controllers
             var consulta = await (from ds in _context.Detalle_Seguimiento
                                   join s in _context.Seguimiento on ds.Id_Seguimiento equals s.Id_Seguimiento
                                   join e in _context.Enfermera on ds.Id_Enfermera equals e.Id_Enfermera
-                                  where ds.Estado == "Activo"
-                                  && ds.Codigo_Receta != null                                  
+                                  where ds.Estado == "Activo" // Borrado lógico del detalle
+                                  && s.Estado_Seguimiento != "FINALIZADO" // El seguimiento general no debe haber terminado
+                                  && ds.Codigo_Receta != null
+                                  // REGLA DEL RANGO: Hoy debe estar entre Inicio y Fin (inclusive)
+                                  && ds.Fecha_Inicio <= hoy
                                   && ds.Fecha_Final >= hoy
                                   select new MedicinaPendienteDTO
                                   {
@@ -138,7 +141,8 @@ namespace GestionEnfermeria.Controllers
                                       Paciente = s.Codigo_Seguro,
                                       Medicamento = ds.Codigo_Receta,
                                       EnfermeraAsignada = e.Nombre + " " + e.Apellido_Paterno,
-                                      FechaInicio = ds.Fecha_Inicio
+                                      FechaInicio = ds.Fecha_Inicio,
+                                      FechaFinal = ds.Fecha_Final // Te sugiero agregarlo al DTO para el FE
                                   }).ToListAsync();
 
             return Ok(consulta);
